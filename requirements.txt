@@ -1,0 +1,9 @@
+streamlit
+plotly
+pandas
+vaderSentiment
+python-dotenv
+requests
+beautifulsoup4
+reportlab
+tweepy
