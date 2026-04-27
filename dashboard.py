@@ -181,6 +181,50 @@ with st.sidebar:
     )
 
     st.divider()
+
+    # ── filtros de período ───────────────────────────────────
+    st.markdown("**Período**")
+    periodo_tipo = st.radio(
+        "Filtrar por",
+        ["Mês", "Semana"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
+    place_reviews = reviews[reviews["place_name"] == place].copy()
+
+    if periodo_tipo == "Mês":
+        meses_disp = (
+            place_reviews["review_date"]
+            .dt.to_period("M")
+            .drop_duplicates()
+            .sort_values(ascending=False)
+        )
+        mes_opts = [str(m) for m in meses_disp]
+        mes_labels = {
+            m: datetime.strptime(m, "%Y-%m").strftime("%B/%Y").capitalize()
+            for m in mes_opts
+        }
+        selected_period = st.selectbox(
+            "Mês",
+            options=["Todos"] + mes_opts,
+            format_func=lambda x: "Todos os meses" if x == "Todos" else mes_labels.get(x, x),
+        )
+    else:
+        semanas_disp = (
+            place_reviews["review_date"]
+            .dt.to_period("W")
+            .drop_duplicates()
+            .sort_values(ascending=False)
+        )
+        sem_opts = [str(s) for s in semanas_disp]
+        selected_period = st.selectbox(
+            "Semana",
+            options=["Todas"] + sem_opts,
+            format_func=lambda x: "Todas as semanas" if x == "Todas" else f"Semana {x}",
+        )
+
+    st.divider()
     st.caption(f"Atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     if st.button("Atualizar dados", use_container_width=True):
         st.cache_data.clear()
@@ -192,6 +236,12 @@ df = reviews[
     (reviews["place_name"] == place) &
     (reviews["source"].isin(selected_sources))
 ].copy()
+
+# aplica filtro de período
+if periodo_tipo == "Mês" and selected_period != "Todos":
+    df = df[df["review_date"].dt.to_period("M").astype(str) == selected_period]
+elif periodo_tipo == "Semana" and selected_period != "Todas":
+    df = df[df["review_date"].dt.to_period("W").astype(str) == selected_period]
 
 if df.empty:
     st.warning("Nenhum dado para os filtros selecionados.")
@@ -208,11 +258,18 @@ health_score = max(0, min(100, int(100 - (negative / total * 100))))
 
 
 # ── cabeçalho ────────────────────────────────────────────────
+if periodo_tipo == "Mês" and selected_period != "Todos":
+    periodo_label = mes_labels.get(selected_period, selected_period)
+elif periodo_tipo == "Semana" and selected_period != "Todas":
+    periodo_label = f"Semana {selected_period}"
+else:
+    periodo_label = "Últimas 8 semanas"
+
 st.markdown(f"""
 <div style="margin-bottom:20px">
     <h1 style="margin:0; font-size:26px; font-weight:800">{place}</h1>
     <p style="margin:0; color:{COLORS['subtext']}; font-size:14px">
-        Últimas 8 semanas &nbsp;·&nbsp; {total} reviews analisados &nbsp;·&nbsp;
+        {periodo_label} &nbsp;·&nbsp; {total} reviews analisados &nbsp;·&nbsp;
         {len(selected_sources)} fonte(s) ativa(s)
     </p>
 </div>
