@@ -70,11 +70,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ── seed de dados demo (roda quando o banco não existe) ──────
+def seed_demo():
+    from reputation_monitor import (
+        init_db, get_mock_reviews, analyse_all_reviews,
+        detect_anomalies, save_results
+    )
+    from reclame_aqui import get_mock_complaints
+
+    place = "Smart Fit - Unidade Centro"
+    conn  = init_db(str(DB_PATH))
+    reviews = get_mock_reviews(place) + get_mock_complaints(place)
+    reviews = analyse_all_reviews(reviews)
+    anomalies = detect_anomalies(reviews)
+    save_results(conn, reviews, anomalies, place)
+    conn.close()
+
+
 # ── carrega dados ────────────────────────────────────────────
 @st.cache_data(ttl=60)
 def load_data():
     if not DB_PATH.exists():
-        return pd.DataFrame(), pd.DataFrame()
+        seed_demo()
     conn = sqlite3.connect(DB_PATH)
     reviews   = pd.read_sql("SELECT * FROM reviews ORDER BY review_date DESC", conn)
     anomalies = pd.read_sql("SELECT * FROM anomaly_log ORDER BY detected_at DESC", conn)
