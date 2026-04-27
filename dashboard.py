@@ -140,6 +140,12 @@ def load_data():
 
 reviews, anomalies = load_data()
 
+# filtros vindos de cliques nos gráficos
+if "chart_topic" not in st.session_state:
+    st.session_state.chart_topic = None
+if "chart_day" not in st.session_state:
+    st.session_state.chart_day = None
+
 CHART_LAYOUT = dict(
     plot_bgcolor  = "rgba(0,0,0,0)",
     paper_bgcolor = "rgba(0,0,0,0)",
@@ -325,7 +331,13 @@ with col_a:
     st.markdown('<div class="section-header">Reclamações por Dia da Semana</div>', unsafe_allow_html=True)
     day_counts = neg_df["day_of_week"].value_counts().reindex(range(7), fill_value=0)
     max_day    = day_counts.max() or 1
-    bar_colors = [COLORS["red"] if v == max_day else COLORS["purple"] for v in day_counts.values]
+    active_day = st.session_state.chart_day
+    bar_colors = [
+        COLORS["cyan"] if DAY_NAMES[i] == active_day
+        else COLORS["red"] if v == max_day
+        else COLORS["purple"]
+        for i, v in enumerate(day_counts.values)
+    ]
 
     fig_day = go.Figure(go.Bar(
         x=DAY_NAMES, y=day_counts.values,
@@ -335,9 +347,18 @@ with col_a:
     ))
     fig_day.update_layout(**CHART_LAYOUT, height=250,
                           xaxis=dict(gridcolor="rgba(0,0,0,0)"),
-                          yaxis=dict(gridcolor="#2a2a4a"))
+                          yaxis=dict(gridcolor="#2a2a4a"),
+                          clickmode="event")
     fig_day.update_traces(marker_line_width=0)
-    st.plotly_chart(fig_day, use_container_width=True)
+    ev_day = st.plotly_chart(fig_day, use_container_width=True,
+                             on_select="rerun", key="chart_day_ev",
+                             selection_mode="points")
+    if ev_day and ev_day.selection.points:
+        clicked = ev_day.selection.points[0].get("x")
+        st.session_state.chart_day = None if clicked == active_day else clicked
+        st.session_state.chart_topic = None
+        st.rerun()
+    st.caption("Clique em uma barra para filtrar o feed")
 
 with col_b:
     st.markdown('<div class="section-header">Principais Temas de Reclamação</div>', unsafe_allow_html=True)
@@ -345,11 +366,17 @@ with col_b:
     for tl in neg_df["topics_list"]:
         all_topics.extend(tl)
     top_topics = Counter(all_topics).most_common(7)
+    active_topic = st.session_state.chart_topic
     if top_topics:
         t_labels = [t[0].capitalize() for t in top_topics][::-1]
         t_values = [t[1] for t in top_topics][::-1]
         max_t    = max(t_values) or 1
-        bar_cols = [COLORS["red"] if v == max_t else COLORS["purple"] for v in t_values]
+        bar_cols = [
+            COLORS["cyan"] if lbl.lower() == (active_topic or "").lower()
+            else COLORS["red"] if v == max_t
+            else COLORS["purple"]
+            for lbl, v in zip(t_labels, t_values)
+        ]
 
         fig_topics = go.Figure(go.Bar(
             x=t_values, y=t_labels, orientation="h",
@@ -359,9 +386,18 @@ with col_b:
         ))
         fig_topics.update_layout(**CHART_LAYOUT, height=250,
                                  xaxis=dict(gridcolor="#2a2a4a"),
-                                 yaxis=dict(gridcolor="rgba(0,0,0,0)"))
+                                 yaxis=dict(gridcolor="rgba(0,0,0,0)"),
+                                 clickmode="event")
         fig_topics.update_traces(marker_line_width=0)
-        st.plotly_chart(fig_topics, use_container_width=True)
+        ev_topics = st.plotly_chart(fig_topics, use_container_width=True,
+                                    on_select="rerun", key="chart_topics_ev",
+                                    selection_mode="points")
+        if ev_topics and ev_topics.selection.points:
+            clicked = ev_topics.selection.points[0].get("y", "").lower()
+            st.session_state.chart_topic = None if clicked == (active_topic or "").lower() else clicked
+            st.session_state.chart_day = None
+            st.rerun()
+        st.caption("Clique em um tema para filtrar o feed")
 
 
 # ── anomalias clicáveis ──────────────────────────────────────
@@ -433,7 +469,27 @@ else:
 
 # ── feed de reviews ──────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
-with st.expander(f"Feed de Reviews  ({len(df)} no período selecionado)", expanded=False):
+
+active_topic = st.session_state.chart_topic
+active_day   = st.session_state.chart_day
+has_chart_filter = active_topic is not None or active_day is not None
+
+if has_chart_filter:
+    filter_parts = []
+    if active_topic:
+        filter_parts.append(f"Tema: **{active_topic.capitalize()}**")
+    if active_day:
+        filter_parts.append(f"Dia: **{active_day}**")
+    filter_label = " + ".join(filter_parts)
+    fc_col, btn_col = st.columns([5, 1])
+    fc_col.info(f"Filtro ativo — {filter_label}")
+    if btn_col.button("Limpar filtro", use_container_width=True):
+        st.session_state.chart_topic = None
+        st.session_state.chart_day   = None
+        st.rerun()
+
+feed_title = f"Feed de Reviews  ({len(df)} no período selecionado)"
+with st.expander(feed_title, expanded=has_chart_filter):
 
  fc1, fc2, fc3 = st.columns(3)
  with fc1:
@@ -449,6 +505,19 @@ with st.expander(f"Feed de Reviews  ({len(df)} no período selecionado)", expand
  if sent_filter == "Neutros":   filtered = filtered[filtered["sentiment"] == "neutral"]
  if src_filter == "Google Reviews": filtered = filtered[filtered["source"] == "google_reviews"]
  if src_filter == "Reclame Aqui":   filtered = filtered[filtered["source"] == "reclame_aqui"]
+
+ # filtros vindos dos gráficos
+ if active_topic:
+     filtered = filtered[
+         filtered["topics_list"].apply(
+             lambda tl: any(t.lower() == active_topic.lower() for t in tl)
+         )
+     ]
+ if active_day:
+     day_idx = DAY_NAMES.index(active_day) if active_day in DAY_NAMES else -1
+     if day_idx >= 0:
+         filtered = filtered[filtered["day_of_week"] == day_idx]
+
  if sort_by == "Mais recentes":  filtered = filtered.sort_values("review_date", ascending=False)
  if sort_by == "Mais críticos":  filtered = filtered.sort_values("sentiment_score", ascending=True)
  if sort_by == "Mais positivos": filtered = filtered.sort_values("sentiment_score", ascending=False)
