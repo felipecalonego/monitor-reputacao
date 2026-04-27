@@ -319,8 +319,9 @@ with col_r:
         x=0.5, y=0.5, showarrow=False, font_size=18,
         font_color=COLORS["cyan"],
     )
-    fig_donut.update_layout(**CHART_LAYOUT, height=260, showlegend=True,
-                            legend=dict(orientation="h", y=-0.15))
+    donut_layout = {**CHART_LAYOUT, "height": 260, "showlegend": True,
+                    "legend": dict(orientation="h", y=-0.15)}
+    fig_donut.update_layout(**donut_layout)
     st.plotly_chart(fig_donut, use_container_width=True)
 
 
