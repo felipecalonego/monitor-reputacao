@@ -297,29 +297,11 @@ kpi(c5, "Anomalias",         str(anom_count),
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# ── tendência semanal + distribuição ─────────────────────────
-col_l, col_r = st.columns([3, 1])
+# ── distribuição + reclamações por dia + temas ───────────────
+col_l, col_a, col_b = st.columns(3)
+neg_df = df[df["sentiment"] == "negative"]
 
 with col_l:
-    st.markdown('<div class="section-header">Tendência Semanal de Sentimento</div>', unsafe_allow_html=True)
-    weekly = df.groupby(["week", "sentiment"]).size().reset_index(name="count")
-    sent_map  = {"positive": "Positivo", "negative": "Negativo", "neutral": "Neutro"}
-    color_map = {"Positivo": COLORS["green"], "Negativo": COLORS["red"], "Neutro": COLORS["subtext"]}
-    weekly["Sentimento"] = weekly["sentiment"].map(sent_map)
-
-    fig_trend = px.bar(
-        weekly, x="week", y="count", color="Sentimento",
-        color_discrete_map=color_map,
-        labels={"week": "Semana", "count": "Reviews"},
-        barmode="stack",
-    )
-    fig_trend.update_layout(**CHART_LAYOUT, height=260,
-                            xaxis=dict(tickangle=-30, gridcolor="#2a2a4a"),
-                            yaxis=dict(gridcolor="#2a2a4a"))
-    fig_trend.update_traces(marker_line_width=0)
-    st.plotly_chart(fig_trend, use_container_width=True)
-
-with col_r:
     st.markdown('<div class="section-header">Distribuição</div>', unsafe_allow_html=True)
     fig_donut = go.Figure(go.Pie(
         labels=["Positivo", "Negativo", "Neutro"],
@@ -338,11 +320,6 @@ with col_r:
                     "legend": dict(orientation="h", y=-0.15)}
     fig_donut.update_layout(**donut_layout)
     st.plotly_chart(fig_donut, use_container_width=True)
-
-
-# ── reclamações por dia + temas ──────────────────────────────
-col_a, col_b = st.columns(2)
-neg_df = df[df["sentiment"] == "negative"]
 
 with col_a:
     st.markdown('<div class="section-header">Reclamações por Dia da Semana</div>', unsafe_allow_html=True)
@@ -456,59 +433,59 @@ else:
 
 # ── feed de reviews ──────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
-st.markdown('<div class="section-header">Feed de Reviews</div>', unsafe_allow_html=True)
+with st.expander(f"Feed de Reviews  ({len(df)} no período selecionado)", expanded=False):
 
-fc1, fc2, fc3 = st.columns(3)
-with fc1:
-    sent_filter = st.selectbox("Sentimento", ["Todos", "Negativos", "Positivos", "Neutros"])
-with fc2:
-    src_filter  = st.selectbox("Fonte", ["Todas", "Google Reviews", "Reclame Aqui"])
-with fc3:
-    sort_by = st.selectbox("Ordenar por", ["Mais recentes", "Mais críticos", "Mais positivos"])
+ fc1, fc2, fc3 = st.columns(3)
+ with fc1:
+     sent_filter = st.selectbox("Sentimento", ["Todos", "Negativos", "Positivos", "Neutros"])
+ with fc2:
+     src_filter  = st.selectbox("Fonte", ["Todas", "Google Reviews", "Reclame Aqui"])
+ with fc3:
+     sort_by = st.selectbox("Ordenar por", ["Mais recentes", "Mais críticos", "Mais positivos"])
 
-filtered = df.copy()
-if sent_filter == "Negativos": filtered = filtered[filtered["sentiment"] == "negative"]
-if sent_filter == "Positivos": filtered = filtered[filtered["sentiment"] == "positive"]
-if sent_filter == "Neutros":   filtered = filtered[filtered["sentiment"] == "neutral"]
-if src_filter == "Google Reviews": filtered = filtered[filtered["source"] == "google_reviews"]
-if src_filter == "Reclame Aqui":   filtered = filtered[filtered["source"] == "reclame_aqui"]
-if sort_by == "Mais recentes":  filtered = filtered.sort_values("review_date", ascending=False)
-if sort_by == "Mais críticos":  filtered = filtered.sort_values("sentiment_score", ascending=True)
-if sort_by == "Mais positivos": filtered = filtered.sort_values("sentiment_score", ascending=False)
+ filtered = df.copy()
+ if sent_filter == "Negativos": filtered = filtered[filtered["sentiment"] == "negative"]
+ if sent_filter == "Positivos": filtered = filtered[filtered["sentiment"] == "positive"]
+ if sent_filter == "Neutros":   filtered = filtered[filtered["sentiment"] == "neutral"]
+ if src_filter == "Google Reviews": filtered = filtered[filtered["source"] == "google_reviews"]
+ if src_filter == "Reclame Aqui":   filtered = filtered[filtered["source"] == "reclame_aqui"]
+ if sort_by == "Mais recentes":  filtered = filtered.sort_values("review_date", ascending=False)
+ if sort_by == "Mais críticos":  filtered = filtered.sort_values("sentiment_score", ascending=True)
+ if sort_by == "Mais positivos": filtered = filtered.sort_values("sentiment_score", ascending=False)
 
-st.caption(f"Exibindo {min(30, len(filtered))} de {len(filtered)} reviews")
+ st.caption(f"Exibindo {min(30, len(filtered))} de {len(filtered)} reviews")
 
-for _, r in filtered.head(30).iterrows():
-    sent    = r["sentiment"]
-    css_cls = {"positive": "review-pos", "negative": "review-neg"}.get(sent, "review-neu")
-    stars   = "★" * int(r["rating"]) if r["rating"] else ""
-    date    = r["review_date"].strftime("%d/%m/%Y")
-    src     = r.get("source", "google_reviews")
-    src_badge = (
-        '<span class="badge badge-ra">Reclame Aqui</span>'
-        if src == "reclame_aqui"
-        else '<span class="badge badge-google">Google</span>'
-    )
-    anomaly_badge = (
-        '<span class="badge badge-anomaly">Anomalia</span>'
-        if r.get("is_anomaly") else ""
-    )
-    text  = str(r["text"])[:250] + ("..." if len(str(r["text"])) > 250 else "")
-    score = r["sentiment_score"]
-    score_color = COLORS["green"] if score > 0 else COLORS["red"] if score < 0 else COLORS["subtext"]
+ for _, r in filtered.head(30).iterrows():
+     sent    = r["sentiment"]
+     css_cls = {"positive": "review-pos", "negative": "review-neg"}.get(sent, "review-neu")
+     stars   = "★" * int(r["rating"]) if r["rating"] else ""
+     date    = r["review_date"].strftime("%d/%m/%Y")
+     src     = r.get("source", "google_reviews")
+     src_badge = (
+         '<span class="badge badge-ra">Reclame Aqui</span>'
+         if src == "reclame_aqui"
+         else '<span class="badge badge-google">Google</span>'
+     )
+     anomaly_badge = (
+         '<span class="badge badge-anomaly">Anomalia</span>'
+         if r.get("is_anomaly") else ""
+     )
+     text  = str(r["text"])[:250] + ("..." if len(str(r["text"])) > 250 else "")
+     score = r["sentiment_score"]
+     score_color = COLORS["green"] if score > 0 else COLORS["red"] if score < 0 else COLORS["subtext"]
 
-    st.markdown(f"""
-    <div class="review-card {css_cls}">
-        <div style="display:flex; justify-content:space-between; align-items:center">
-            <span class="review-author">{r['author']} &nbsp; {stars}</span>
-            <span class="review-meta">
-                {src_badge}{anomaly_badge}
-                &nbsp; {date}
-                &nbsp; <span style="color:{score_color}; font-weight:700">
-                    score {score:+.2f}
-                </span>
-            </span>
-        </div>
-        <div class="review-text">{text}</div>
-    </div>
-    """, unsafe_allow_html=True)
+     st.markdown(f"""
+     <div class="review-card {css_cls}">
+         <div style="display:flex; justify-content:space-between; align-items:center">
+             <span class="review-author">{r['author']} &nbsp; {stars}</span>
+             <span class="review-meta">
+                 {src_badge}{anomaly_badge}
+                 &nbsp; {date}
+                 &nbsp; <span style="color:{score_color}; font-weight:700">
+                     score {score:+.2f}
+                 </span>
+             </span>
+         </div>
+         <div class="review-text">{text}</div>
+     </div>
+     """, unsafe_allow_html=True)
